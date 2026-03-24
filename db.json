@@ -1,0 +1,36 @@
+{
+  "licenses": [
+    {
+      "key": "TEST-KEY-123",
+      "maxUses": 1,
+      "createdAt": "2026-03-24T12:00:00.000Z"
+    },
+    {
+      "key": "Ericqwe2253",
+      "maxUses": 10,
+      "createdAt": "2026-03-24T12:00:00.000Z"
+    },
+    {
+      "key": "MULTI-2",
+      "maxUses": 3,
+      "createdAt": "2026-03-24T12:50:39.639Z"
+    }
+  ],
+  "activations": [
+    {
+      "key": "MULTI-2",
+      "deviceId": "device-A",
+      "activatedAt": "2026-03-24T12:50:39.645Z"
+    },
+    {
+      "key": "MULTI-2",
+      "deviceId": "device-B",
+      "activatedAt": "2026-03-24T12:50:39.647Z"
+    },
+    {
+      "key": "MULTI-2",
+      "deviceId": "device-C",
+      "activatedAt": "2026-03-24T12:50:39.654Z"
+    }
+  ]
+}

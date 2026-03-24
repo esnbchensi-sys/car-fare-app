@@ -7,8 +7,9 @@
     "start": "node api/server.js"
   },
   "dependencies": {
-    "express": "^4.17.1",
-    "cors": "^2.8.5",
-    "lowdb": "^1.0.0"
+    "cors": "^2.8.6",
+    "express": "^4.22.1",
+    "lowdb": "^1.0.0",
+    "path": "^0.12.7"
   }
 }

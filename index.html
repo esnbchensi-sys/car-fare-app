@@ -651,34 +651,58 @@
         const licenseKeyInput = document.getElementById('licenseKeyInput');
         const errorMsg = document.getElementById('errorMsg');
 
-        // 管理員後門：點擊標題 5 次強制進入 (測試用)
+        // 管理員後門：點擊標題 5 次顯示裝置 ID 或強制進入 (測試用)
         let clickCount = 0;
         document.querySelector('#activation-overlay h2').addEventListener('click', () => {
             clickCount++;
-            if (clickCount >= 5) {
+            const deviceId = getOrCreateDeviceId();
+            if (clickCount >= 3) {
+                errorMsg.innerText = `偵錯資訊: ID=${deviceId.substring(0, 8)}...`;
+                errorMsg.classList.remove('text-red-500');
+                errorMsg.classList.add('text-gray-400');
+            }
+            if (clickCount >= 7) {
                 unlockApp();
                 showToast('已進入測試模式');
             }
         });
 
-        // 取得或產生裝置 ID
+        // 取得或產生裝置 ID (更強健的版本)
         function getOrCreateDeviceId() {
-            let deviceId = localStorage.getItem('deviceId');
-            if (!deviceId) {
-                deviceId = crypto.randomUUID();
-                localStorage.setItem('deviceId', deviceId);
+            try {
+                let deviceId = localStorage.getItem('deviceId');
+                if (!deviceId) {
+                    // 優先使用 crypto.randomUUID()，若無則回退到時間戳+隨機數
+                    if (window.crypto && window.crypto.randomUUID) {
+                        deviceId = crypto.randomUUID();
+                    } else {
+                        deviceId = 'dev-' + Date.now() + '-' + Math.floor(Math.random() * 1000000);
+                    }
+                    localStorage.setItem('deviceId', deviceId);
+                }
+                return deviceId;
+            } catch (e) {
+                console.error('無法存取 localStorage:', e);
+                return 'temp-' + Date.now();
             }
-            return deviceId;
         }
 
         async function checkActivation() {
             const deviceId = getOrCreateDeviceId();
+            console.log('當前裝置 ID:', deviceId);
+            
             try {
                 const response = await fetch(`${API_BASE_URL}/verify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId })
                 });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`伺服器錯誤 (${response.status}): ${errorText}`);
+                }
+
                 const data = await response.json();
                 if (data.success && data.isActivated) {
                     unlockApp();
@@ -687,7 +711,7 @@
                 }
             } catch (error) {
                 console.error('驗證失敗:', error);
-                errorMsg.innerText = '無法連接啟用伺服器，請檢查網路連線。';
+                errorMsg.innerText = `連線失敗: ${error.message}`;
                 showActivationOverlay();
             }
         }
