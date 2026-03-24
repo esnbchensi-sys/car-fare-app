@@ -1,0 +1,21 @@
+{
+  "name": "白牌跑車車資計算器",
+  "short_name": "車資計算",
+  "description": "白牌跑車專用路徑與車資計算工具",
+  "start_url": "index.html",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3202/3202926.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3202/3202926.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
