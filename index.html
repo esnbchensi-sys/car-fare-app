@@ -2,157 +2,493 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>白牌跑車車資計算器</title>
+    <!-- PWA Meta Tags -->
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="車資計算">
     <link rel="apple-touch-icon" href="https://cdn-icons-png.flaticon.com/512/3202/3202926.png">
+    
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Routing Machine CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.css" />
     <style>
-        :root { --bg-color: #f3f4f6; --card-bg: rgba(255, 255, 255, 0.9); --text-color: #1f2937; --accent-color: #4f46e5; }
-        .dark { --bg-color: #111827; --card-bg: rgba(31, 41, 55, 0.9); --text-color: #f9fafb; --accent-color: #818cf8; }
+        :root {
+            --bg-color: #f3f4f6;
+            --card-bg: rgba(255, 255, 255, 0.9);
+            --text-color: #1f2937;
+            --accent-color: #4f46e5;
+            --border-color: rgba(255, 255, 255, 0.2);
+        }
+        .dark {
+            --bg-color: #111827;
+            --card-bg: rgba(31, 41, 55, 0.9);
+            --text-color: #f9fafb;
+            --accent-color: #818cf8;
+            --border-color: rgba(255, 255, 255, 0.1);
+        }
         #map { height: 400px; width: 100%; border-radius: 0.5rem; }
-        @media (min-width: 1024px) { #map { height: 600px; } }
-        .glass-morphism { background: var(--card-bg); backdrop-filter: blur(10px); border: 1px solid rgba(255,255,255,0.2); color: var(--text-color); }
+        @media (min-width: 1024px) {
+            #map { height: 600px; }
+        }
+        .glass-morphism {
+            background: var(--card-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+        }
         body { background-color: var(--bg-color); color: var(--text-color); }
         .dark .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7); }
-        .spinner { border-top-color: var(--accent-color); animation: spin 1s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .animate-shake { animation: shake 0.5s both; }
-        @keyframes shake { 10%, 90% { transform: translate3d(-1px, 0, 0); } 20%, 80% { transform: translate3d(2px, 0, 0); } }
+
+        #activation-overlay {
+            transition: opacity 0.5s ease-in-out;
+        }
+
+        #toast {
+            transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out;
+        }
+
+        .spinner {
+            border-top-color: var(--accent-color);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body class="min-h-screen font-sans pb-10 transition-colors duration-300">
-    <div id="loading-overlay" class="hidden fixed inset-0 bg-gray-900/50 z-[4000] flex items-center justify-center">
+
+    <!-- Global Loading Spinner -->
+    <div id="loading-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-[4000] flex items-center justify-center">
         <div class="spinner w-16 h-16 border-4 border-gray-300 rounded-full"></div>
     </div>
-    <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-3 px-6 rounded-lg shadow-lg transform translate-x-[120%] transition-all z-[3000] opacity-0"><p id="toast-message"></p></div>
 
-    <!-- 啟用畫面 -->
+    <!-- Toast Notification -->
+    <div id="toast" class="fixed top-5 right-5 bg-green-500 text-white py-3 px-6 rounded-lg shadow-lg transform translate-x-[120%] opacity-0 z-[3000]">
+        <p id="toast-message"></p>
+    </div>
+
+    <!-- Activation Overlay -->
     <div id="activation-overlay" class="fixed inset-0 bg-gray-900 bg-opacity-80 backdrop-blur-sm z-[2000] flex items-center justify-center p-4">
         <div class="w-full max-w-sm bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-8 text-center">
-            <h2 id="activation-title" class="text-2xl font-bold text-gray-800 dark:text-white mb-2 cursor-pointer">程式啟用</h2>
-            <p class="text-gray-600 dark:text-gray-400 mb-6">請輸入授權碼以解鎖功能</p>
-            <input type="text" id="licenseKeyInput" placeholder="請在此輸入授權碼" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg text-center mb-4 text-black dark:text-white">
-            <button id="activateBtn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700">啟用程式</button>
-            <p id="errorMsg" class="text-red-500 text-sm mt-4"></p>
+            <h2 class="text-2xl font-bold text-gray-800 dark:text-white mb-2">程式啟用</h2>
+            <p class="text-gray-600 dark:text-gray-400 mb-6">請輸入您的授權碼以解鎖全部功能。</p>
+            <input type="text" id="licenseKeyInput" placeholder="請在此輸入授權碼" class="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 dark:bg-gray-700 rounded-lg text-center focus:outline-none focus:ring-2 focus:ring-indigo-500 mb-4">
+            <button id="activateBtn" class="w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700 transition-transform transform hover:scale-105">啟用程式</button>
+            <p id="errorMsg" class="text-red-500 text-sm mt-4 h-4"></p>
         </div>
     </div>
 
-    <!-- 主程式內容 -->
     <div id="appContainer" class="hidden container mx-auto px-4 py-4 lg:py-8">
-        <header class="text-center mb-6 relative">
-            <button id="darkModetoggle" class="absolute right-0 top-0 p-2 rounded-full bg-white dark:bg-gray-800 shadow-md"><span id="darkModeIcon">🌙</span></button>
+        <header class="text-center mb-6 lg:mb-10 relative">
+            <div class="absolute right-0 top-0">
+                <button id="darkModetoggle" class="p-2 rounded-full bg-white dark:bg-gray-800 shadow-md">
+                    <span id="darkModeIcon">🌙</span>
+                </button>
+            </div>
             <h1 class="text-2xl lg:text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">🚗 車資計算器</h1>
+            <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">白牌跑車專用路徑規劃</p>
+            
+            <!-- PWA 安裝按鈕 -->
+            <button id="installBtn" class="hidden mt-4 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition-all flex items-center mx-auto">
+                <span class="mr-2">📲</span> 安裝到手機桌面
+            </button>
         </header>
+
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- 設定與結果區塊 -->
             <div class="lg:col-span-1 space-y-6">
-                <div class="glass-morphism p-6 rounded-xl shadow-lg border-2 border-indigo-500/30">
-                    <h2 class="text-xl font-bold mb-4 flex justify-between"><span>⚙️ 費率自定義</span><button id="addStopBtn" class="text-xs bg-indigo-500 text-white px-2 py-1 rounded">+中途點</button></h2>
+                <!-- 費率設定 -->
+                <div class="glass-morphism p-6 rounded-xl shadow-lg">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold flex items-center">
+                            <span class="mr-2">⚙️</span> 費率設定
+                        </h2>
+                        <button id="addStopBtn" class="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">
+                            + 新增中途點
+                        </button>
+                    </div>
                     <div class="space-y-4">
-                        <div><label class="block text-sm font-bold mb-1 text-indigo-600">起跳費 (元)</label><input type="number" id="baseFare" value="100" class="w-full px-3 py-2 rounded-md text-black"></div>
-                        <div><label class="block text-sm font-bold mb-1 text-indigo-600">每公里費用 (元)</label><input type="number" id="farePerKm" value="25" class="w-full px-3 py-2 rounded-md text-black"></div>
-                        <div><label class="block text-sm font-bold mb-1 text-indigo-600">每分鐘費用 (元)</label><input type="number" id="farePerMin" value="5" class="w-full px-3 py-2 rounded-md text-black"></div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">起跳費 (元)</label>
+                            <input type="number" id="baseFare" value="100" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">每公里費用 (元/km)</label>
+                            <input type="number" id="farePerKm" value="25" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1">每分鐘費用 (元/min)</label>
+                            <input type="number" id="farePerMin" value="5" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
                     </div>
                 </div>
+
+                <!-- 計算結果 -->
                 <div id="resultBox" class="glass-morphism p-6 rounded-xl shadow-lg hidden">
+                    <h2 class="text-xl font-bold mb-4 flex items-center text-indigo-700 dark:text-indigo-400">
+                        <span class="mr-2">📊</span> 預估詳情
+                    </h2>
                     <div class="space-y-3">
-                        <div class="flex justify-between border-b pb-2"><span>距離:</span><span id="resDistance" class="font-bold">-</span></div>
-                        <div class="flex justify-between border-b pb-2"><span>時間:</span><span id="resDuration" class="font-bold">-</span></div>
-                        <div class="flex justify-between items-center pt-2"><span class="text-lg font-bold">預估車資:</span><span id="resTotalFare" class="text-3xl font-black text-indigo-600">NT$ 0</span></div>
-                        <button id="shareBtn" class="w-full mt-4 bg-green-500 text-white py-2 rounded-lg font-bold">📋 分享給客戶</button>
+                        <div class="flex justify-between border-b dark:border-gray-700 pb-2">
+                            <span>預估距離:</span>
+                            <span id="resDistance" class="font-semibold">- km</span>
+                        </div>
+                        <div class="flex justify-between border-b dark:border-gray-700 pb-2">
+                            <span>預估時間:</span>
+                            <span id="resDuration" class="font-semibold">- min</span>
+                        </div>
+                        <div class="mt-4 pt-4 border-t border-indigo-200 dark:border-indigo-900">
+                            <div class="flex justify-between items-center">
+                                <span class="text-lg font-bold">預估車資:</span>
+                                <span id="resTotalFare" class="text-3xl font-black text-indigo-600 dark:text-indigo-400">NT$ 0</span>
+                            </div>
+                        </div>
+                        <!-- 分享按鈕 -->
+                        <button id="shareBtn" class="w-full mt-4 bg-green-500 text-white py-2 rounded-lg font-bold hover:bg-green-600 transition-colors flex items-center justify-center">
+                            <span class="mr-2">📋</span> 複製結果傳送給客戶
+                        </button>
                     </div>
                 </div>
-                <div class="space-y-2">
-                    <button id="locateBtn" class="w-full bg-white dark:bg-gray-800 py-2 rounded-md text-indigo-600 border border-indigo-200">📍 使用當前位置</button>
-                    <button id="resetBtn" class="w-full bg-red-50 py-2 rounded-md text-red-600 border border-red-200">🔄 重置路徑</button>
+
+                <div class="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-lg text-sm text-indigo-800 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 space-y-2">
+                    <p>💡 提示：在地圖上點選兩個點（起點與終點），或搜尋地點。您也可以新增中途點。</p>
+                    <button id="locateBtn" class="w-full bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 py-2 rounded-md text-indigo-600 dark:text-indigo-400 font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors flex items-center justify-center">
+                        <span class="mr-2">📍</span> 使用我的當前位置
+                    </button>
+                    <button id="resetBtn" class="w-full bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 py-2 rounded-md text-red-600 dark:text-red-400 font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors flex items-center justify-center mt-2">
+                        <span class="mr-2">🔄</span> 重置路徑
+                    </button>
                 </div>
             </div>
-            <div class="lg:col-span-2"><div class="bg-white p-2 rounded-xl shadow-xl relative"><input type="text" id="searchAddr" placeholder="搜尋地點..." class="absolute top-4 left-4 right-4 z-[1000] px-4 py-2 rounded-full shadow-lg border-none text-black"><div id="map"></div></div></div>
+
+            <!-- 地圖區塊 -->
+            <div class="lg:col-span-2">
+                <div class="bg-white dark:bg-gray-800 p-2 rounded-xl shadow-xl relative border dark:border-gray-700">
+                    <!-- 搜尋列 -->
+                    <div class="absolute top-4 left-4 right-4 z-[1000] flex gap-2">
+                        <input type="text" id="searchAddr" placeholder="搜尋地點..." class="flex-1 px-4 py-2 rounded-full shadow-lg border-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400">
+                    </div>
+                    <div id="map"></div>
+                </div>
+            </div>
         </div>
     </div>
 
+    <!-- Scripts -->
+    <!-- Leaflet JS -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Routing Machine JS -->
     <script src="https://unpkg.com/leaflet-routing-machine@latest/dist/leaflet-routing-machine.js"></script>
+
     <script>
-        // --- 核心設定 ---
-        const API_BASE_URL = window.location.hostname.includes('localhost') ? 'http://localhost:3000' : window.location.origin;
+        // 初始化地圖 (預設位置: 台北)
+        const map = L.map('map', {
+            zoomControl: false // 手機版建議隱藏，騰出空間
+        }).setView([25.0330, 121.5654], 13);
+        
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        let routingControl = null;
+        let markers = [];
+        let waypoints = [];
+
+        // 載入儲存的費率與主題
+        function loadSettings() {
+            ['baseFare', 'farePerKm', 'farePerMin'].forEach(id => {
+                const saved = localStorage.getItem(id);
+                if (saved) document.getElementById(id).value = saved;
+            });
+            if (localStorage.getItem('darkMode') === 'true') {
+                document.documentElement.classList.add('dark');
+                updateDarkModeUI();
+            }
+        }
+        loadSettings();
+
+        // 夜間模式切換
+        const darkModeBtn = document.getElementById('darkModetoggle');
+        const darkModeIcon = document.getElementById('darkModeIcon');
+        
+        darkModeBtn.addEventListener('click', () => {
+            document.documentElement.classList.toggle('dark');
+            const isDark = document.documentElement.classList.contains('dark');
+            localStorage.setItem('darkMode', isDark);
+            updateDarkModeUI();
+        });
+
+        function updateDarkModeUI() {
+            const isDark = document.documentElement.classList.contains('dark');
+            darkModeIcon.innerText = isDark ? '☀️' : '🌙';
+        }
+
+        // 車資計算
+        function calculateFare(distanceMeters, durationSeconds) {
+            const baseFare = parseFloat(document.getElementById('baseFare').value) || 0;
+            const farePerKm = parseFloat(document.getElementById('farePerKm').value) || 0;
+            const farePerMin = parseFloat(document.getElementById('farePerMin').value) || 0;
+
+            const distanceKm = distanceMeters / 1000;
+            const durationMin = durationSeconds / 60;
+
+            const totalFare = baseFare + (distanceKm * farePerKm) + (durationMin * farePerMin);
+            const finalFare = Math.ceil(totalFare);
+            
+            // 更新 UI
+            document.getElementById('resultBox').classList.remove('hidden');
+            document.getElementById('resDistance').innerText = distanceKm.toFixed(2) + ' km';
+            document.getElementById('resDuration').innerText = Math.round(durationMin) + ' min';
+            document.getElementById('resTotalFare').innerText = 'NT$ ' + finalFare;
+
+            // 儲存設定
+            localStorage.setItem('baseFare', baseFare);
+            localStorage.setItem('farePerKm', farePerKm);
+            localStorage.setItem('farePerMin', farePerMin);
+        }
+
+        // 更新路徑規劃
+        function updateRouting() {
+            if (routingControl) {
+                map.removeControl(routingControl);
+            }
+
+            if (waypoints.length >= 2) {
+                showLoader(); // 顯示載入動畫
+                routingControl = L.Routing.control({
+                    waypoints: waypoints,
+                    routeWhileDragging: true,
+                    show: false,
+                    language: 'zh',
+                    createMarker: function(i, wp) {
+                        return L.marker(wp.latLng, {
+                            draggable: true
+                        });
+                    }
+                }).on('routesfound', function(e) {
+                    const routes = e.routes;
+                    const summary = routes[0].summary;
+                    calculateFare(summary.totalDistance, summary.totalTime);
+                    hideLoader(); // 隱藏載入動畫
+                }).on('routingerror', function(e) {
+                    showToast('路徑規劃失敗，請檢查網路或地點。' , 'error');
+                    hideLoader(); // 隱藏載入動畫
+                }).addTo(map);
+            }
+        }
+
+        // 當地圖被點擊時
+        function handleMapClick(latlng) {
+            if (waypoints.length >= 2 && !routingControl) {
+                // 如果已經有兩個點但還沒建立路徑，這不應該發生，但保險起見清空
+                resetPath();
+            }
+
+            waypoints.push(latlng);
+            const marker = L.marker(latlng).addTo(map);
+            markers.push(marker);
+
+            if (waypoints.length >= 2) {
+                // 清除暫時的 markers，改由 routingControl 管理
+                markers.forEach(m => map.removeLayer(m));
+                markers = [];
+                updateRouting();
+            }
+        }
+
+        map.on('click', (e) => handleMapClick(e.latlng));
+
+        // 新增中途點按鈕
+        document.getElementById('addStopBtn').addEventListener('click', () => {
+            showToast('請在地圖上點選下一個位置作為中途點');
+        });
+
+        // 重置路徑
+        function resetPath() {
+            if (routingControl) {
+                map.removeControl(routingControl);
+                routingControl = null;
+            }
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            waypoints = [];
+            document.getElementById('resultBox').classList.add('hidden');
+        }
+
+        document.getElementById('resetBtn').addEventListener('click', resetPath);
+
+        // 監聽輸入框變化
+        ['baseFare', 'farePerKm', 'farePerMin'].forEach(id => {
+            const input = document.getElementById(id);
+            input.addEventListener('input', () => {
+                // 防呆：不允許負數
+                if (parseFloat(input.value) < 0) {
+                    input.value = 0;
+                    showToast('費率不能為負數', 'error');
+                }
+
+                if (routingControl && routingControl._selectedRoute) {
+                    const summary = routingControl._selectedRoute.summary;
+                    calculateFare(summary.totalDistance, summary.totalTime);
+                }
+            });
+        });
+
+        // 定位功能
+        document.getElementById('locateBtn').addEventListener('click', () => {
+            map.locate({setView: true, maxZoom: 16});
+        });
+
+        map.on('locationfound', (e) => {
+            handleMapClick(e.latlng);
+        });
+
+        // 搜尋功能
+        document.getElementById('searchAddr').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                const query = this.value;
+                if (!query) return;
+                showLoader();
+                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.length > 0) {
+                            const result = data[0];
+                            const latlng = [parseFloat(result.lat), parseFloat(result.lon)];
+                            map.setView(latlng, 16);
+                            handleMapClick(latlng);
+                        } else {
+                            showToast('找不到該地點', 'error');
+                        }
+                    })
+                    .catch(() => showToast('搜尋失敗，請檢查網路連線。', 'error'))
+                    .finally(() => hideLoader());
+            }
+        });
+
+        // 分享功能
+        document.getElementById('shareBtn').addEventListener('click', async () => {
+            const distance = document.getElementById('resDistance').innerText;
+            const duration = document.getElementById('resDuration').innerText;
+            const fare = document.getElementById('resTotalFare').innerText;
+            const text = `🚗 車資預估報告：\n------------------\n📍 預估距離：${distance}\n⏱️ 預估時間：${duration}\n💰 總計車資：${fare}\n------------------\n(僅供參考，以實際路況為準)`;
+            
+            if (navigator.share) {
+                // 如果手機支援原生分享 API
+                try {
+                    await navigator.share({
+                        title: '車資預估報告',
+                        text: text
+                    });
+                } catch (err) {
+                    console.log('分享取消或失敗', err);
+                }
+            } else {
+                // 如果不支援 (例如電腦版)，則使用剪貼簿
+                navigator.clipboard.writeText(text).then(() => {
+                    showToast('已複製到剪貼簿！');
+                });
+            }
+        });
+
+        // 註冊 Service Worker (PWA)
+        let deferredPrompt;
+        const installBtn = document.getElementById('installBtn');
+
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('service-worker.js')
+                    .then(reg => console.log('Service Worker 註冊成功'))
+                    .catch(err => console.log('Service Worker 註冊失敗'));
+            });
+        }
+
+        // 處理 PWA 安裝提示 (Android/Chrome)
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.remove('hidden');
+        });
+
+        installBtn.addEventListener('click', async () => {
+            if (deferredPrompt) {
+                deferredPrompt.prompt();
+                const { outcome } = await deferredPrompt.userChoice;
+                if (outcome === 'accepted') {
+                    installBtn.classList.add('hidden');
+                }
+                deferredPrompt = null;
+            }
+        });
+
+        // --- 授權機制 ---
+        // 自動判斷 API 位置 (方便本機測試與線上部署)
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5500';
+        // 如果是 Vercel 部署，後端就在同一個網址下
+        const API_BASE_URL = isLocal ? 'http://localhost:3000' : window.location.origin; 
+        
         const activationOverlay = document.getElementById('activation-overlay');
         const appContainer = document.getElementById('appContainer');
         const activateBtn = document.getElementById('activateBtn');
         const licenseKeyInput = document.getElementById('licenseKeyInput');
         const errorMsg = document.getElementById('errorMsg');
 
-        // --- 管理員後門 (連點標題5次強制進入) ---
+        // 管理員後門：點擊標題 5 次強制進入 (測試用)
         let clickCount = 0;
-        document.getElementById('activation-title').onclick = () => {
+        document.querySelector('h1').addEventListener('click', () => {
             clickCount++;
-            if(clickCount >= 5) { unlockApp(); showToast('管理員模式已啟動'); }
-        };
-
-        // --- 地圖邏輯 ---
-        const map = L.map('map', { zoomControl: false }).setView([25.0330, 121.5654], 13);
-        L.control.zoom({ position: 'bottomright' }).addTo(map);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        let routingControl = null, waypoints = [];
-
-        function calculateFare(dist, time) {
-            const b = parseFloat(document.getElementById('baseFare').value) || 0;
-            const k = parseFloat(document.getElementById('farePerKm').value) || 0;
-            const m = parseFloat(document.getElementById('farePerMin').value) || 0;
-            const total = Math.ceil(b + (dist/1000 * k) + (time/60 * m));
-            document.getElementById('resultBox').classList.remove('hidden');
-            document.getElementById('resDistance').innerText = (dist/1000).toFixed(2) + ' km';
-            document.getElementById('resDuration').innerText = Math.round(time/60) + ' min';
-            document.getElementById('resTotalFare').innerText = 'NT$ ' + total;
-            localStorage.setItem('baseFare', b); localStorage.setItem('farePerKm', k); localStorage.setItem('farePerMin', m);
-        }
-
-        function updateRouting() {
-            if (routingControl) map.removeControl(routingControl);
-            if (waypoints.length < 2) return;
-            showLoader();
-            routingControl = L.Routing.control({
-                waypoints: waypoints,
-                show: false,
-                createMarker: (i, wp) => L.marker(wp.latLng, { draggable: true })
-            }).on('routesfound', (e) => {
-                calculateFare(e.routes[0].summary.totalDistance, e.routes[0].summary.totalTime);
-                hideLoader();
-            }).on('routingerror', () => { showToast('路徑失敗', 'error'); hideLoader(); }).addTo(map);
-        }
-
-        map.on('click', (e) => {
-            waypoints.push(e.latlng);
-            L.marker(e.latlng).addTo(map);
-            if (waypoints.length >= 2) updateRouting();
+            if (clickCount >= 5) {
+                unlockApp();
+                showToast('已進入測試模式');
+            }
         });
 
-        document.getElementById('resetBtn').onclick = () => location.reload();
-        document.getElementById('addStopBtn').onclick = () => showToast('請點選地圖');
-
-        // --- 授權邏輯 ---
-        function getDeviceId() {
-            let id = localStorage.getItem('deviceId');
-            if (!id) { id = crypto.randomUUID(); localStorage.setItem('deviceId', id); }
-            return id;
+        // 取得或產生裝置 ID
+        function getOrCreateDeviceId() {
+            let deviceId = localStorage.getItem('deviceId');
+            if (!deviceId) {
+                deviceId = crypto.randomUUID();
+                localStorage.setItem('deviceId', deviceId);
+            }
+            return deviceId;
         }
 
         async function checkActivation() {
-            const deviceId = getDeviceId();
+            const deviceId = getOrCreateDeviceId();
             try {
-                const r = await fetch(`${API_BASE_URL}/verify`, {
+                const response = await fetch(`${API_BASE_URL}/verify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ deviceId })
                 });
-                const d = await r.json();
-                if (d.isActivated) unlockApp();
-            } catch (e) { console.log('尚未啟用'); }
+                const data = await response.json();
+                if (data.success && data.isActivated) {
+                    unlockApp();
+                } else {
+                    showActivationOverlay();
+                }
+            } catch (error) {
+                console.error('驗證失敗:', error);
+                errorMsg.innerText = '無法連接啟用伺服器，請檢查網路連線。';
+                showActivationOverlay();
+            }
+        }
+
+        function showActivationOverlay() {
+            appContainer.classList.add('hidden');
+            activationOverlay.classList.remove('hidden');
+            activationOverlay.style.opacity = '1';
         }
 
         function unlockApp() {
@@ -160,48 +496,83 @@
             setTimeout(() => {
                 activationOverlay.classList.add('hidden');
                 appContainer.classList.remove('hidden');
-                ['baseFare','farePerKm','farePerMin'].forEach(id=>{
-                    const v = localStorage.getItem(id); if(v) document.getElementById(id).value = v;
-                });
             }, 500);
         }
 
-        activateBtn.onclick = async () => {
-            const key = licenseKeyInput.value.trim();
-            if (!key) return showToast('請輸入授權碼', 'error');
-            showLoader();
+        activateBtn.addEventListener('click', async () => {
+            const licenseKey = licenseKeyInput.value.trim();
+            const deviceId = getOrCreateDeviceId();
+            errorMsg.innerText = '';
+
+            if (!licenseKey) {
+                errorMsg.innerText = '授權碼不能為空';
+                return;
+            }
+
             try {
-                const r = await fetch(`${API_BASE_URL}/activate`, {
+                activateBtn.disabled = true;
+                activateBtn.innerText = '驗證中...';
+
+                const response = await fetch(`${API_BASE_URL}/activate`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ licenseKey: key, deviceId: getDeviceId() })
+                    body: JSON.stringify({ licenseKey, deviceId })
                 });
-                const d = await r.json();
-                if (d.success) unlockApp();
-                else errorMsg.innerText = d.message || '啟用失敗';
-            } catch (e) { 
-                errorMsg.innerText = '連線失敗，請檢查 Vercel 後端是否正常。';
-            } finally { hideLoader(); }
-        };
 
-        // --- UI 工具 ---
-        function showLoader() { document.getElementById('loading-overlay').classList.remove('hidden'); }
-        function hideLoader() { document.getElementById('loading-overlay').classList.add('hidden'); }
-        function showToast(m, type='success') {
-            const t = document.getElementById('toast');
-            document.getElementById('toast-message').innerText = m;
-            t.classList.remove('translate-x-[120%]', 'opacity-0');
-            t.classList.add('bg-green-500'); if(type==='error') t.classList.add('bg-red-500');
-            setTimeout(() => { t.classList.add('translate-x-[120%]', 'opacity-0'); }, 3000);
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    unlockApp();
+                } else {
+                    errorMsg.innerText = data.message || '啟用失敗，請重試。';
+                }
+            } catch (error) {
+                errorMsg.innerText = '無法連接啟用伺服器，請檢查網路連線。';
+            } finally {
+                activateBtn.disabled = false;
+                activateBtn.innerText = '啟用程式';
+            }
+        });
+
+        // 初始化檢查
+        document.addEventListener('DOMContentLoaded', checkActivation);
+
+        // --- Loader --- 
+        const loader = document.getElementById('loading-overlay');
+        function showLoader() {
+            loader.classList.remove('hidden');
+        }
+        function hideLoader() {
+            loader.classList.add('hidden');
         }
 
-        document.getElementById('shareBtn').onclick = async () => {
-            const text = `🚗 車資預估：\n路程：${document.getElementById('resDistance').innerText}\n時間：${document.getElementById('resDuration').innerText}\n車資：${document.getElementById('resTotalFare').innerText}\n(實際以路況為準)`;
-            if (navigator.share) await navigator.share({ text });
-            else { navigator.clipboard.writeText(text); showToast('已複製'); }
-        };
+        // --- Toast Notification ---
+        const toast = document.getElementById('toast');
+        const toastMessage = document.getElementById('toast-message');
+        let toastTimeout;
 
-        document.addEventListener('DOMContentLoaded', checkActivation);
+        function showToast(message, type = 'success') {
+            toastMessage.innerText = message;
+
+            // Change color based on type
+            if (type === 'error') {
+                toast.classList.remove('bg-green-500');
+                toast.classList.add('bg-red-500');
+            } else {
+                toast.classList.remove('bg-red-500');
+                toast.classList.add('bg-green-500');
+            }
+
+            toast.classList.remove('translate-x-[120%]', 'opacity-0');
+            toast.classList.add('translate-x-0', 'opacity-100');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.remove('translate-x-0', 'opacity-100');
+                toast.classList.add('translate-x-[120%]', 'opacity-0');
+            }, 3000);
+        }
+
     </script>
 </body>
 </html>
