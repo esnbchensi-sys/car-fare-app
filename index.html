@@ -33,10 +33,7 @@
             --accent-color: #818cf8;
             --border-color: rgba(255, 255, 255, 0.1);
         }
-        #map { height: 400px; width: 100%; border-radius: 0.5rem; }
-        @media (min-width: 1024px) {
-            #map { height: 600px; }
-        }
+        #map { position: fixed; top: 0; left: 0; height: 100vh; width: 100vw; z-index: 0; }
         .glass-morphism {
             background: var(--card-bg);
             backdrop-filter: blur(10px);
@@ -62,9 +59,26 @@
         @keyframes spin {
             to { transform: rotate(360deg); }
         }
+
+        /* 新增樣式 */
+        #bottom-panel {
+            transition: transform 0.3s ease-in-out;
+        }
+
+        .custom-marker {
+            background-color: #ef4444;
+            border: 2px solid white;
+            border-radius: 50%;
+            width: 12px !important;
+            height: 12px !important;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
     </style>
 </head>
-<body class="min-h-screen font-sans pb-10 transition-colors duration-300">
+<body class="min-h-screen font-sans overflow-hidden">
+
+    <!-- 地圖容器 -->
+    <div id="map"></div>
 
     <!-- Global Loading Spinner -->
     <div id="loading-overlay" class="hidden fixed inset-0 bg-gray-900 bg-opacity-50 z-[4000] flex items-center justify-center">
@@ -87,97 +101,135 @@
         </div>
     </div>
 
-    <div id="appContainer" class="hidden container mx-auto px-4 py-4 lg:py-8">
-        <header class="text-center mb-6 lg:mb-10 relative">
-            <div class="absolute right-0 top-0">
-                <button id="darkModetoggle" class="p-2 rounded-full bg-white dark:bg-gray-800 shadow-md">
+    <!-- 主應用程式容器 -->
+    <div id="appContainer" class="hidden fixed inset-0 pointer-events-none">
+        <!-- 頂部資訊列 -->
+        <div id="top-bar" class="absolute top-0 left-0 right-0 p-4 flex justify-between items-center pointer-events-auto">
+            <div id="rate-display" class="glass-morphism px-4 py-2 rounded-full font-mono font-bold text-lg cursor-pointer">
+                <span id="baseFareDisplay">100</span>/<span id="farePerKmDisplay">25</span>/<span id="farePerMinDisplay">5</span>
+            </div>
+            <div class="flex gap-2">
+                <button id="historyBtn" class="glass-morphism w-10 h-10 flex items-center justify-center rounded-full text-xl">📜</button>
+                <button id="resetBtn" class="glass-morphism w-10 h-10 flex items-center justify-center rounded-full text-xl">🔄</button>
+                <button id="darkModetoggle" class="glass-morphism w-10 h-10 flex items-center justify-center rounded-full text-xl">
                     <span id="darkModeIcon">🌙</span>
                 </button>
             </div>
-            <h1 class="text-2xl lg:text-4xl font-extrabold text-indigo-600 dark:text-indigo-400">🚗 車資計算器</h1>
-            <p class="text-gray-600 dark:text-gray-400 text-sm mt-1">白牌跑車專用路徑規劃</p>
-            
-            <!-- PWA 安裝按鈕 -->
-            <button id="installBtn" class="hidden mt-4 bg-indigo-600 text-white px-6 py-2 rounded-full font-bold shadow-lg hover:bg-indigo-700 transition-all flex items-center mx-auto">
-                <span class="mr-2">📲</span> 安裝到手機桌面
-            </button>
-        </header>
+        </div>
 
-        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <!-- 設定與結果區塊 -->
-            <div class="lg:col-span-1 space-y-6">
-                <!-- 費率設定 -->
-                <div class="glass-morphism p-6 rounded-xl shadow-lg">
-                    <div class="flex justify-between items-center mb-4">
-                        <h2 class="text-xl font-bold flex items-center">
-                            <span class="mr-2">⚙️</span> 費率設定
-                        </h2>
-                        <button id="addStopBtn" class="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">
-                            + 新增中途點
-                        </button>
-                    </div>
-                    <div class="space-y-4">
-                        <div>
-                            <label class="block text-sm font-medium mb-1">起跳費 (元)</label>
-                            <input type="number" id="baseFare" value="100" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1">每公里費用 (元/km)</label>
-                            <input type="number" id="farePerKm" value="25" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium mb-1">每分鐘費用 (元/min)</label>
-                            <input type="number" id="farePerMin" value="5" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                        </div>
-                    </div>
+        <!-- 搜尋與定位按鈕 -->
+        <div class="absolute top-20 left-4 right-4 flex gap-2 pointer-events-auto">
+            <input type="text" id="searchAddr" placeholder="搜尋地點..." class="flex-1 glass-morphism px-4 py-2 rounded-full shadow-lg border-none focus:ring-2 focus:ring-indigo-500">
+            <button id="locateBtn" class="glass-morphism w-10 h-10 flex items-center justify-center rounded-full text-xl">📍</button>
+            <button id="manualInputBtn" class="glass-morphism w-10 h-10 flex items-center justify-center rounded-full text-xl" title="手動輸入(無訊號時用)">⌨️</button>
+        </div>
+
+        <!-- 底部結果面板 -->
+        <div id="bottom-panel" class="absolute bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-md rounded-t-2xl shadow-2xl p-6 transform translate-y-full pointer-events-auto">
+            <div class="flex justify-between items-center">
+                <div class="flex flex-col">
+                    <div class="text-5xl font-black text-indigo-600 dark:text-indigo-400" id="resTotalFare">$0</div>
+                    <div class="text-xs text-gray-400 mt-1" id="fareBreakdown">計算中...</div>
                 </div>
-
-                <!-- 計算結果 -->
-                <div id="resultBox" class="glass-morphism p-6 rounded-xl shadow-lg hidden">
-                    <h2 class="text-xl font-bold mb-4 flex items-center text-indigo-700 dark:text-indigo-400">
-                        <span class="mr-2">📊</span> 預估詳情
-                    </h2>
-                    <div class="space-y-3">
-                        <div class="flex justify-between border-b dark:border-gray-700 pb-2">
-                            <span>預估距離:</span>
-                            <span id="resDistance" class="font-semibold">- km</span>
-                        </div>
-                        <div class="flex justify-between border-b dark:border-gray-700 pb-2">
-                            <span>預估時間:</span>
-                            <span id="resDuration" class="font-semibold">- min</span>
-                        </div>
-                        <div class="mt-4 pt-4 border-t border-indigo-200 dark:border-indigo-900">
-                            <div class="flex justify-between items-center">
-                                <span class="text-lg font-bold">預估車資:</span>
-                                <span id="resTotalFare" class="text-3xl font-black text-indigo-600 dark:text-indigo-400">NT$ 0</span>
-                            </div>
-                        </div>
-                        <!-- 分享按鈕 -->
-                        <button id="shareBtn" class="w-full mt-4 bg-green-500 text-white py-2 rounded-lg font-bold hover:bg-green-600 transition-colors flex items-center justify-center">
-                            <span class="mr-2">📋</span> 複製結果傳送給客戶
-                        </button>
-                    </div>
-                </div>
-
-                <div class="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-lg text-sm text-indigo-800 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 space-y-2">
-                    <p>💡 提示：在地圖上點選兩個點（起點與終點），或搜尋地點。您也可以新增中途點。</p>
-                    <button id="locateBtn" class="w-full bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 py-2 rounded-md text-indigo-600 dark:text-indigo-400 font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors flex items-center justify-center">
-                        <span class="mr-2">📍</span> 使用我的當前位置
-                    </button>
-                    <button id="resetBtn" class="w-full bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 py-2 rounded-md text-red-600 dark:text-red-400 font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors flex items-center justify-center mt-2">
-                        <span class="mr-2">🔄</span> 重置路徑
-                    </button>
+                <div class="flex gap-2">
+                    <button id="navBtn" class="bg-indigo-500 text-white w-12 h-12 flex items-center justify-center rounded-full text-2xl font-bold hover:bg-indigo-600 transition-colors" title="開啟導航">🧭</button>
+                    <button id="shareBtn" class="bg-green-500 text-white w-12 h-12 flex items-center justify-center rounded-full text-2xl font-bold hover:bg-green-600 transition-colors">📋</button>
                 </div>
             </div>
+            <div class="mt-4 grid grid-cols-3 gap-4 text-center">
+                <div>
+                    <div class="text-2xl font-bold" id="resDistance">-</div>
+                    <div class="text-sm text-gray-500">km</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold" id="resDuration">-</div>
+                    <div class="text-sm text-gray-500">min</div>
+                </div>
+                <div>
+                    <div class="text-2xl font-bold" id="resBaseFare">-</div>
+                    <div class="text-sm text-gray-500">起步</div>
+                </div>
+            </div>
+        </div>
 
-            <!-- 地圖區塊 -->
-            <div class="lg:col-span-2">
-                <div class="bg-white dark:bg-gray-800 p-2 rounded-xl shadow-xl relative border dark:border-gray-700">
-                    <!-- 搜尋列 -->
-                    <div class="absolute top-4 left-4 right-4 z-[1000] flex gap-2">
-                        <input type="text" id="searchAddr" placeholder="搜尋地點..." class="flex-1 px-4 py-2 rounded-full shadow-lg border-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400">
+        <!-- 費率設定彈窗 -->
+        <div id="rate-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 pointer-events-auto">
+            <div class="glass-morphism w-full max-w-sm rounded-2xl p-6">
+                <h2 class="text-xl font-bold mb-4">費率設定</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">起跳費 (元)</label>
+                        <input type="number" id="baseFare" value="100" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
-                    <div id="map"></div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">每公里費用 (元/km)</label>
+                        <input type="number" id="farePerKm" value="25" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">每分鐘費用 (元/min)</label>
+                        <input type="number" id="farePerMin" value="5" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-xs font-medium mb-1">最低消費 (元)</label>
+                            <input type="number" id="minFare" value="150" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-medium mb-1">加成係數 (1.0=原價)</label>
+                            <input type="number" id="adjFactor" value="1.0" step="0.1" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md text-sm">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">進位規則</label>
+                        <select id="roundingRule" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md">
+                            <option value="1">無條件進位到 1 元</option>
+                            <option value="5">無條件進位到 5 元</option>
+                            <option value="10">無條件進位到 10 元</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="saveRateBtn" class="mt-6 w-full bg-indigo-600 text-white font-bold py-3 rounded-lg hover:bg-indigo-700">儲存設定</button>
+                
+                <!-- PWA 安裝按鈕 -->
+                <button id="installBtn" class="hidden mt-4 w-full bg-green-600 text-white py-3 rounded-lg font-bold shadow-lg hover:bg-green-700 flex items-center justify-center">
+                    <span class="mr-2">📲</span> 安裝到手機桌面
+                </button>
+            </div>
+        </div>
+
+        <!-- 歷史紀錄彈窗 -->
+        <div id="history-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 pointer-events-auto">
+            <div class="glass-morphism w-full max-w-md rounded-2xl p-6 flex flex-col max-h-[80vh]">
+                <div class="flex justify-between items-center mb-4">
+                    <h2 class="text-xl font-bold">歷史紀錄</h2>
+                    <button id="closeHistoryBtn" class="text-2xl">✕</button>
+                </div>
+                <div id="history-list" class="flex-1 overflow-y-auto space-y-3 pr-2">
+                    <!-- 紀錄會動態插入在此 -->
+                    <p class="text-center text-gray-500 py-10">尚無紀錄</p>
+                </div>
+                <button id="clearHistoryBtn" class="mt-4 w-full bg-red-100 text-red-600 font-bold py-2 rounded-lg hover:bg-red-200">清除所有紀錄</button>
+            </div>
+        </div>
+
+        <!-- 手動輸入彈窗 (訊號丟失時) -->
+        <div id="manual-modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 pointer-events-auto">
+            <div class="glass-morphism w-full max-w-sm rounded-2xl p-6">
+                <h2 class="text-xl font-bold mb-4">緊急模式 (手動輸入)</h2>
+                <p class="text-sm text-gray-500 mb-4">當網路不穩或 GPS 丟失時，請手動輸入實際里程與時間。</p>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-1">總里程 (km)</label>
+                        <input type="number" id="manualKm" step="0.1" placeholder="例如: 5.2" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-1">總時間 (分鐘)</label>
+                        <input type="number" id="manualMin" placeholder="例如: 15" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md">
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-6">
+                    <button id="cancelManualBtn" class="flex-1 bg-gray-200 text-gray-800 font-bold py-3 rounded-lg">取消</button>
+                    <button id="confirmManualBtn" class="flex-1 bg-indigo-600 text-white font-bold py-3 rounded-lg">計算</button>
                 </div>
             </div>
         </div>
@@ -197,24 +249,49 @@
         
         L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '© OpenStreetMap contributors'
-        }).addTo(map);
-
+        let tileLayer = null;
         let routingControl = null;
-        let markers = [];
+        let tempMarkers = [];
         let waypoints = [];
+
+        // 更新地圖主題
+        function updateMapTheme() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const newUrl = isDark 
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' // Positron (夜間)
+                : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png'; // Voyager (日間)
+            
+            if (tileLayer) {
+                tileLayer.setUrl(newUrl);
+            } else {
+                tileLayer = L.tileLayer(newUrl, {
+                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                    subdomains: 'abcd',
+                    maxZoom: 20
+                }).addTo(map);
+            }
+        }
+
+        // 更新頂部費率顯示
+        function updateRateDisplay() {
+            document.getElementById('baseFareDisplay').innerText = document.getElementById('baseFare').value;
+            document.getElementById('farePerKmDisplay').innerText = document.getElementById('farePerKm').value;
+            document.getElementById('farePerMinDisplay').innerText = document.getElementById('farePerMin').value;
+        }
 
         // 載入儲存的費率與主題
         function loadSettings() {
-            ['baseFare', 'farePerKm', 'farePerMin'].forEach(id => {
+            ['baseFare', 'farePerKm', 'farePerMin', 'minFare', 'adjFactor', 'roundingRule'].forEach(id => {
                 const saved = localStorage.getItem(id);
                 if (saved) document.getElementById(id).value = saved;
             });
             if (localStorage.getItem('darkMode') === 'true') {
                 document.documentElement.classList.add('dark');
-                updateDarkModeUI();
             }
+            updateDarkModeUI();
+            updateMapTheme();
+            updateRateDisplay();
+            updateHistoryUI();
         }
         loadSettings();
 
@@ -227,6 +304,7 @@
             const isDark = document.documentElement.classList.contains('dark');
             localStorage.setItem('darkMode', isDark);
             updateDarkModeUI();
+            updateMapTheme(); // 切換地圖主題
         });
 
         function updateDarkModeUI() {
@@ -235,34 +313,149 @@
         }
 
         // 車資計算
-        function calculateFare(distanceMeters, durationSeconds) {
+        function calculateFare(distanceMeters, durationSeconds, isManual = false) {
             const baseFare = parseFloat(document.getElementById('baseFare').value) || 0;
             const farePerKm = parseFloat(document.getElementById('farePerKm').value) || 0;
             const farePerMin = parseFloat(document.getElementById('farePerMin').value) || 0;
+            const minFare = parseFloat(document.getElementById('minFare').value) || 0;
+            const adjFactor = parseFloat(document.getElementById('adjFactor').value) || 1.0;
+            const roundingRule = parseInt(document.getElementById('roundingRule').value) || 1;
 
             const distanceKm = distanceMeters / 1000;
             const durationMin = durationSeconds / 60;
 
-            const totalFare = baseFare + (distanceKm * farePerKm) + (durationMin * farePerMin);
-            const finalFare = Math.ceil(totalFare);
+            // 計算拆解
+            const distCost = distanceKm * farePerKm;
+            const timeCost = durationMin * farePerMin;
+            let subTotal = (baseFare + distCost + timeCost) * adjFactor;
+            
+            // 是否低於最低消費
+            let isMinFareApplied = false;
+            if (subTotal < minFare) {
+                subTotal = minFare;
+                isMinFareApplied = true;
+            }
+
+            // 進位規則
+            let finalFare = Math.ceil(subTotal);
+            if (roundingRule > 1) {
+                finalFare = Math.ceil(finalFare / roundingRule) * roundingRule;
+            }
             
             // 更新 UI
-            document.getElementById('resultBox').classList.remove('hidden');
-            document.getElementById('resDistance').innerText = distanceKm.toFixed(2) + ' km';
-            document.getElementById('resDuration').innerText = Math.round(durationMin) + ' min';
-            document.getElementById('resTotalFare').innerText = 'NT$ ' + finalFare;
+            document.getElementById('bottom-panel').classList.remove('translate-y-full');
+            document.getElementById('resDistance').innerText = distanceKm.toFixed(1);
+            document.getElementById('resDuration').innerText = Math.round(durationMin);
+            document.getElementById('resBaseFare').innerText = baseFare;
+            document.getElementById('resTotalFare').innerText = '$' + finalFare;
+            
+            // 顯示拆解
+            const breakdownText = isMinFareApplied 
+                ? `已達最低消費 $${minFare}`
+                : `(${baseFare} + ${distCost.toFixed(1)} + ${timeCost.toFixed(1)}) x ${adjFactor}`;
+            document.getElementById('fareBreakdown').innerText = breakdownText;
 
             // 儲存設定
-            localStorage.setItem('baseFare', baseFare);
-            localStorage.setItem('farePerKm', farePerKm);
-            localStorage.setItem('farePerMin', farePerMin);
+            ['baseFare', 'farePerKm', 'farePerMin', 'minFare', 'adjFactor', 'roundingRule'].forEach(id => {
+                localStorage.setItem(id, document.getElementById(id).value);
+            });
+            updateRateDisplay();
+
+            // 儲存至歷史紀錄
+            saveToHistory({
+                date: new Date().toLocaleString('zh-TW'),
+                fare: finalFare,
+                distance: distanceKm.toFixed(1),
+                duration: Math.round(durationMin),
+                rates: `${baseFare}/${farePerKm}/${farePerMin}${adjFactor !== 1 ? ' x' + adjFactor : ''}`,
+                isManual: isManual
+            });
         }
+
+        // --- 歷史紀錄功能 ---
+        function saveToHistory(record) {
+            let history = JSON.parse(localStorage.getItem('tripHistory') || '[]');
+            history.unshift(record); // 最新紀錄在最前面
+            // 只保留最近 50 筆
+            if (history.length > 50) history = history.slice(0, 50);
+            localStorage.setItem('tripHistory', JSON.stringify(history));
+            updateHistoryUI();
+        }
+
+        function updateHistoryUI() {
+            const list = document.getElementById('history-list');
+            const history = JSON.parse(localStorage.getItem('tripHistory') || '[]');
+            
+            if (history.length === 0) {
+                list.innerHTML = '<p class="text-center text-gray-500 py-10">尚無紀錄</p>';
+                return;
+            }
+
+            list.innerHTML = history.map((h, index) => `
+                <div class="glass-morphism p-3 rounded-xl flex justify-between items-center border-l-4 ${h.isManual ? 'border-red-500' : 'border-indigo-500'}">
+                    <div>
+                        <div class="text-xs text-gray-500">${h.date} ${h.isManual ? '(手動)' : ''}</div>
+                        <div class="font-bold text-lg text-indigo-600 dark:text-indigo-400">$${h.fare}</div>
+                    </div>
+                    <div class="text-right text-sm">
+                        <div>${h.distance} km / ${h.duration} min</div>
+                        <div class="text-xs text-gray-400">費率: ${h.rates}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- 手動輸入功能 ---
+        const manualModal = document.getElementById('manual-modal');
+        const manualInputBtn = document.getElementById('manualInputBtn');
+        const confirmManualBtn = document.getElementById('confirmManualBtn');
+        const cancelManualBtn = document.getElementById('cancelManualBtn');
+
+        manualInputBtn.addEventListener('click', () => manualModal.classList.remove('hidden'));
+        cancelManualBtn.addEventListener('click', () => manualModal.classList.add('hidden'));
+
+        confirmManualBtn.addEventListener('click', () => {
+            const km = parseFloat(document.getElementById('manualKm').value);
+            const min = parseFloat(document.getElementById('manualMin').value);
+            
+            if (isNaN(km) || isNaN(min) || km < 0 || min < 0) {
+                showToast('請輸入正確的里程與時間', 'error');
+                return;
+            }
+
+            manualModal.classList.add('hidden');
+            // 將 km 轉為公尺，min 轉為秒以符合計算函式
+            calculateFare(km * 1000, min * 60, true);
+            showToast('已手動計算完成');
+        });
+
+        // --- 歷史紀錄介面邏輯 ---
+        const historyModal = document.getElementById('history-modal');
+        const historyBtn = document.getElementById('historyBtn');
+        const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+        historyBtn.addEventListener('click', () => {
+            updateHistoryUI();
+            historyModal.classList.remove('hidden');
+        });
+        closeHistoryBtn.addEventListener('click', () => historyModal.classList.add('hidden'));
+        clearHistoryBtn.addEventListener('click', () => {
+            if (confirm('確定要清除所有紀錄嗎？')) {
+                localStorage.removeItem('tripHistory');
+                updateHistoryUI();
+            }
+        });
 
         // 更新路徑規劃
         function updateRouting() {
             if (routingControl) {
                 map.removeControl(routingControl);
             }
+
+            // 清除所有暫時標記，改由 Routing 顯示
+            tempMarkers.forEach(m => map.removeLayer(m));
+            tempMarkers = [];
 
             if (waypoints.length >= 2) {
                 showLoader(); // 顯示載入動畫
@@ -273,7 +466,8 @@
                     language: 'zh',
                     createMarker: function(i, wp) {
                         return L.marker(wp.latLng, {
-                            draggable: true
+                            draggable: true,
+                            icon: L.divIcon({className: 'custom-marker'}) // 使用自訂的透明圖標
                         });
                     }
                 }).on('routesfound', function(e) {
@@ -282,7 +476,7 @@
                     calculateFare(summary.totalDistance, summary.totalTime);
                     hideLoader(); // 隱藏載入動畫
                 }).on('routingerror', function(e) {
-                    showToast('路徑規劃失敗，請檢查網路或地點。' , 'error');
+                    showToast('路徑規劃失敗，請檢查網路或地點。', 'error');
                     hideLoader(); // 隱藏載入動畫
                 }).addTo(map);
             }
@@ -290,29 +484,20 @@
 
         // 當地圖被點擊時
         function handleMapClick(latlng) {
-            if (waypoints.length >= 2 && !routingControl) {
-                // 如果已經有兩個點但還沒建立路徑，這不應該發生，但保險起見清空
-                resetPath();
-            }
-
-            waypoints.push(latlng);
-            const marker = L.marker(latlng).addTo(map);
-            markers.push(marker);
+            waypoints.push(L.latLng(latlng));
+            
+            // 建立暫時的點標記，給使用者即時回饋
+            const m = L.marker(latlng, {
+                icon: L.divIcon({className: 'custom-marker'})
+            }).addTo(map);
+            tempMarkers.push(m);
 
             if (waypoints.length >= 2) {
-                // 清除暫時的 markers，改由 routingControl 管理
-                markers.forEach(m => map.removeLayer(m));
-                markers = [];
                 updateRouting();
             }
         }
 
         map.on('click', (e) => handleMapClick(e.latlng));
-
-        // 新增中途點按鈕
-        document.getElementById('addStopBtn').addEventListener('click', () => {
-            showToast('請在地圖上點選下一個位置作為中途點');
-        });
 
         // 重置路徑
         function resetPath() {
@@ -320,29 +505,36 @@
                 map.removeControl(routingControl);
                 routingControl = null;
             }
-            markers.forEach(m => map.removeLayer(m));
-            markers = [];
+            tempMarkers.forEach(m => map.removeLayer(m));
+            tempMarkers = [];
             waypoints = [];
-            document.getElementById('resultBox').classList.add('hidden');
+            document.getElementById('bottom-panel').classList.add('translate-y-full');
         }
 
         document.getElementById('resetBtn').addEventListener('click', resetPath);
 
-        // 監聽輸入框變化
-        ['baseFare', 'farePerKm', 'farePerMin'].forEach(id => {
-            const input = document.getElementById(id);
-            input.addEventListener('input', () => {
-                // 防呆：不允許負數
-                if (parseFloat(input.value) < 0) {
-                    input.value = 0;
-                    showToast('費率不能為負數', 'error');
-                }
+        // 費率設定彈窗邏輯
+        const rateDisplay = document.getElementById('rate-display');
+        const rateModal = document.getElementById('rate-modal');
+        const saveRateBtn = document.getElementById('saveRateBtn');
 
-                if (routingControl && routingControl._selectedRoute) {
-                    const summary = routingControl._selectedRoute.summary;
-                    calculateFare(summary.totalDistance, summary.totalTime);
-                }
-            });
+        rateDisplay.addEventListener('click', () => {
+            rateModal.classList.remove('hidden');
+        });
+
+        saveRateBtn.addEventListener('click', () => {
+            rateModal.classList.add('hidden');
+            // 重新計算費用並儲存
+            if (routingControl && routingControl._selectedRoute) {
+                const summary = routingControl._selectedRoute.summary;
+                calculateFare(summary.totalDistance, summary.totalTime);
+            } else {
+                // 如果還沒有路徑，只儲存並更新顯示
+                ['baseFare', 'farePerKm', 'farePerMin', 'minFare', 'adjFactor'].forEach(id => {
+                    localStorage.setItem(id, document.getElementById(id).value);
+                });
+                updateRateDisplay();
+            }
         });
 
         // 定位功能
@@ -379,27 +571,42 @@
 
         // 分享功能
         document.getElementById('shareBtn').addEventListener('click', async () => {
-            const distance = document.getElementById('resDistance').innerText;
-            const duration = document.getElementById('resDuration').innerText;
+            const distance = document.getElementById('resDistance').innerText + ' km';
+            const duration = document.getElementById('resDuration').innerText + ' min';
             const fare = document.getElementById('resTotalFare').innerText;
             const text = `🚗 車資預估報告：\n------------------\n📍 預估距離：${distance}\n⏱️ 預估時間：${duration}\n💰 總計車資：${fare}\n------------------\n(僅供參考，以實際路況為準)`;
             
             if (navigator.share) {
-                // 如果手機支援原生分享 API
                 try {
-                    await navigator.share({
-                        title: '車資預估報告',
-                        text: text
-                    });
-                } catch (err) {
-                    console.log('分享取消或失敗', err);
-                }
+                    await navigator.share({ title: '車資預估報告', text: text });
+                } catch (err) { console.log('分享取消或失敗', err); }
             } else {
-                // 如果不支援 (例如電腦版)，則使用剪貼簿
                 navigator.clipboard.writeText(text).then(() => {
                     showToast('已複製到剪貼簿！');
                 });
             }
+        });
+
+        // 導航功能
+        document.getElementById('navBtn').addEventListener('click', () => {
+            if (waypoints.length < 2) {
+                showToast('請先選擇起點與終點', 'error');
+                return;
+            }
+            
+            const start = waypoints[0];
+            const end = waypoints[waypoints.length - 1];
+            const intermediate = waypoints.slice(1, -1);
+            
+            // Google Maps 網址格式
+            let url = `https://www.google.com/maps/dir/?api=1&origin=${start.lat},${start.lng}&destination=${end.lat},${end.lng}`;
+            
+            if (intermediate.length > 0) {
+                const waypointsStr = intermediate.map(w => `${w.lat},${w.lng}`).join('|');
+                url += `&waypoints=${waypointsStr}`;
+            }
+            
+            window.open(url, '_blank');
         });
 
         // 註冊 Service Worker (PWA)
@@ -446,7 +653,7 @@
 
         // 管理員後門：點擊標題 5 次強制進入 (測試用)
         let clickCount = 0;
-        document.querySelector('h1').addEventListener('click', () => {
+        document.querySelector('#activation-overlay h2').addEventListener('click', () => {
             clickCount++;
             if (clickCount >= 5) {
                 unlockApp();
@@ -496,6 +703,8 @@
             setTimeout(() => {
                 activationOverlay.classList.add('hidden');
                 appContainer.classList.remove('hidden');
+                // 確保地圖在容器顯示後正確計算大小
+                map.invalidateSize();
             }, 500);
         }
 
