@@ -47,6 +47,19 @@
         body { background-color: var(--bg-color); color: var(--text-color); }
         .dark .leaflet-tile { filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7); }
 
+        /* 讓輸入框看起來更明顯可以改 */
+        input[type="number"] {
+            background: #ffffff;
+            border: 2px solid #e5e7eb;
+            font-weight: bold;
+            color: #111827;
+        }
+        .dark input[type="number"] {
+            background: #374151;
+            border: 2px solid #4b5563;
+            color: #ffffff;
+        }
+
         #activation-overlay { transition: opacity 0.5s ease-in-out; }
         #toast { transition: transform 0.5s ease-in-out, opacity 0.5s ease-in-out; }
         .spinner { border-top-color: var(--accent-color); animation: spin 1s linear infinite; }
@@ -95,29 +108,30 @@
 
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
             <div class="lg:col-span-1 space-y-6">
-                <!-- 費率設定 -->
-                <div class="glass-morphism p-6 rounded-xl shadow-lg">
+                <!-- 費率設定 (司機在此自行修改) -->
+                <div class="glass-morphism p-6 rounded-xl shadow-lg border-2 border-indigo-500/30">
                     <div class="flex justify-between items-center mb-4">
                         <h2 class="text-xl font-bold flex items-center">
-                            <span class="mr-2">⚙️</span> 費率設定
+                            <span class="mr-2">⚙️</span> 司機費率自定義
                         </h2>
                         <button id="addStopBtn" class="text-xs bg-indigo-500 text-white px-2 py-1 rounded hover:bg-indigo-600 transition-colors">
-                            + 新增中途點
+                            + 中途點
                         </button>
                     </div>
                     <div class="space-y-4">
                         <div>
-                            <label class="block text-sm font-medium mb-1">起跳費 (元)</label>
-                            <input type="number" id="baseFare" value="100" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <label class="block text-sm font-bold mb-1 text-indigo-600 dark:text-indigo-400">起跳費 (元)</label>
+                            <input type="number" id="baseFare" value="100" class="w-full px-3 py-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium mb-1">每公里費用 (元/km)</label>
-                            <input type="number" id="farePerKm" value="25" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <label class="block text-sm font-bold mb-1 text-indigo-600 dark:text-indigo-400">每公里費用 (元/km)</label>
+                            <input type="number" id="farePerKm" value="25" class="w-full px-3 py-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg">
                         </div>
                         <div>
-                            <label class="block text-sm font-medium mb-1">每分鐘費用 (元/min)</label>
-                            <input type="number" id="farePerMin" value="5" class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                            <label class="block text-sm font-bold mb-1 text-indigo-600 dark:text-indigo-400">每分鐘費用 (元/min)</label>
+                            <input type="number" id="farePerMin" value="5" class="w-full px-3 py-3 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 text-lg">
                         </div>
+                        <p class="text-xs text-gray-500 italic">* 修改後系統將自動儲存您的費率設定</p>
                     </div>
                 </div>
 
@@ -148,7 +162,7 @@
                 </div>
 
                 <div class="bg-indigo-50 dark:bg-indigo-900/30 p-4 rounded-lg text-sm text-indigo-800 dark:text-indigo-300 border border-indigo-100 dark:border-indigo-800 space-y-2">
-                    <p>💡 提示：在地圖上點選兩個點（起點與終點），或搜尋地點。您也可以新增中途點。</p>
+                    <p>💡 提示：點地圖兩次（起終點），系統會自動計算。司機可隨時修改上方費率。</p>
                     <button id="locateBtn" class="w-full bg-white dark:bg-gray-800 border border-indigo-200 dark:border-indigo-800 py-2 rounded-md text-indigo-600 dark:text-indigo-400 font-medium hover:bg-indigo-50 dark:hover:bg-indigo-900/50 transition-colors flex items-center justify-center">
                         <span class="mr-2">📍</span> 使用我的當前位置
                     </button>
@@ -197,227 +211,4 @@
         function loadSettings() {
             ['baseFare', 'farePerKm', 'farePerMin'].forEach(id => {
                 const saved = localStorage.getItem(id);
-                if (saved) document.getElementById(id).value = saved;
-            });
-            if (localStorage.getItem('darkMode') === 'true') {
-                document.documentElement.classList.add('dark');
-                updateDarkModeUI();
-            }
-        }
-
-        const darkModeBtn = document.getElementById('darkModetoggle');
-        const darkModeIcon = document.getElementById('darkModeIcon');
-        darkModeBtn.addEventListener('click', () => {
-            document.documentElement.classList.toggle('dark');
-            const isDark = document.documentElement.classList.contains('dark');
-            localStorage.setItem('darkMode', isDark);
-            updateDarkModeUI();
-        });
-
-        function updateDarkModeUI() {
-            const isDark = document.documentElement.classList.contains('dark');
-            darkModeIcon.innerText = isDark ? '☀️' : '🌙';
-        }
-
-        function calculateFare(distanceMeters, durationSeconds) {
-            const baseFare = parseFloat(document.getElementById('baseFare').value) || 0;
-            const farePerKm = parseFloat(document.getElementById('farePerKm').value) || 0;
-            const farePerMin = parseFloat(document.getElementById('farePerMin').value) || 0;
-            const distanceKm = distanceMeters / 1000;
-            const durationMin = durationSeconds / 60;
-            const totalFare = Math.ceil(baseFare + (distanceKm * farePerKm) + (durationMin * farePerMin));
-            
-            document.getElementById('resultBox').classList.remove('hidden');
-            document.getElementById('resDistance').innerText = distanceKm.toFixed(2) + ' km';
-            document.getElementById('resDuration').innerText = Math.round(durationMin) + ' min';
-            document.getElementById('resTotalFare').innerText = 'NT$ ' + totalFare;
-
-            localStorage.setItem('baseFare', baseFare);
-            localStorage.setItem('farePerKm', farePerKm);
-            localStorage.setItem('farePerMin', farePerMin);
-        }
-
-        function updateRouting() {
-            if (routingControl) map.removeControl(routingControl);
-            if (waypoints.length >= 2) {
-                showLoader();
-                routingControl = L.Routing.control({
-                    waypoints: waypoints,
-                    routeWhileDragging: true,
-                    show: false,
-                    language: 'zh',
-                    createMarker: (i, wp) => L.marker(wp.latLng, { draggable: true })
-                }).on('routesfound', (e) => {
-                    calculateFare(e.routes[0].summary.totalDistance, e.routes[0].summary.totalTime);
-                    hideLoader();
-                }).on('routingerror', () => {
-                    showToast('路徑規劃失敗', 'error');
-                    hideLoader();
-                }).addTo(map);
-            }
-        }
-
-        function handleMapClick(latlng) {
-            waypoints.push(latlng);
-            const marker = L.marker(latlng).addTo(map);
-            markers.push(marker);
-            if (waypoints.length >= 2) {
-                markers.forEach(m => map.removeLayer(m));
-                markers = [];
-                updateRouting();
-            }
-        }
-
-        map.on('click', (e) => handleMapClick(e.latlng));
-        document.getElementById('resetBtn').addEventListener('click', () => {
-            if (routingControl) map.removeControl(routingControl);
-            routingControl = null;
-            markers.forEach(m => map.removeLayer(m));
-            markers = []; waypoints = [];
-            document.getElementById('resultBox').classList.add('hidden');
-        });
-
-        document.getElementById('addStopBtn').addEventListener('click', () => showToast('請點選地圖位置作為中途點'));
-
-        ['baseFare', 'farePerKm', 'farePerMin'].forEach(id => {
-            const input = document.getElementById(id);
-            input.addEventListener('input', () => {
-                if (parseFloat(input.value) < 0) { input.value = 0; showToast('費率不能為負數', 'error'); }
-                if (routingControl && routingControl._selectedRoute) {
-                    const summary = routingControl._selectedRoute.summary;
-                    calculateFare(summary.totalDistance, summary.totalTime);
-                }
-            });
-        });
-
-        document.getElementById('locateBtn').addEventListener('click', () => map.locate({setView: true, maxZoom: 16}));
-        map.on('locationfound', (e) => handleMapClick(e.latlng));
-
-        document.getElementById('searchAddr').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                const query = this.value; if (!query) return;
-                showLoader();
-                fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}`)
-                    .then(r => r.json()).then(data => {
-                        if (data.length > 0) {
-                            const latlng = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
-                            map.setView(latlng, 16); handleMapClick(latlng);
-                        } else { showToast('找不到該地點', 'error'); }
-                    }).finally(() => hideLoader());
-            }
-        });
-
-        document.getElementById('shareBtn').addEventListener('click', async () => {
-            const distance = document.getElementById('resDistance').innerText;
-            const duration = document.getElementById('resDuration').innerText;
-            const fare = document.getElementById('resTotalFare').innerText;
-            const text = `🚗 車資預估報告：\n------------------\n📍 預估距離：${distance}\n⏱️ 預估時間：${duration}\n💰 總計車資：${fare}\n------------------\n(僅供參考，以實際路況為準)`;
-            if (navigator.share) {
-                try { await navigator.share({ title: '車資預估', text: text }); } catch (err) {}
-            } else {
-                navigator.clipboard.writeText(text).then(() => showToast('已複製到剪貼簿！'));
-            }
-        });
-
-        // --- 授權驗證系統 ---
-        function getOrCreateDeviceId() {
-            let id = localStorage.getItem('deviceId');
-            if (!id) { id = crypto.randomUUID(); localStorage.setItem('deviceId', id); }
-            return id;
-        }
-
-        async function checkActivation() {
-            const deviceId = getOrCreateDeviceId();
-            showLoader();
-            try {
-                const r = await fetch(`${API_BASE_URL}/verify`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId })
-                });
-                const d = await r.json();
-                if (d.success && d.isActivated) unlockApp();
-                else showActivationOverlay();
-            } catch (e) {
-                errorMsg.innerText = '無法連接伺服器，請檢查網路。';
-                showActivationOverlay();
-            } finally { hideLoader(); }
-        }
-
-        function showActivationOverlay() {
-            appContainer.classList.add('hidden');
-            activationOverlay.classList.remove('hidden');
-            activationOverlay.style.opacity = '1';
-        }
-
-        function unlockApp() {
-            activationOverlay.style.opacity = '0';
-            setTimeout(() => {
-                activationOverlay.classList.add('hidden');
-                appContainer.classList.remove('hidden');
-                loadSettings();
-            }, 500);
-        }
-
-        activateBtn.addEventListener('click', async () => {
-            const licenseKey = licenseKeyInput.value.trim();
-            const deviceId = getOrCreateDeviceId();
-            if (!licenseKey) { showToast('請輸入授權碼', 'error'); return; }
-            showLoader();
-            try {
-                const r = await fetch(`${API_BASE_URL}/activate`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ licenseKey, deviceId })
-                });
-                const d = await r.json();
-                if (r.ok && d.success) unlockApp();
-                else {
-                    errorMsg.innerText = d.message || '啟用失敗';
-                    licenseKeyInput.classList.add('animate-shake');
-                    setTimeout(() => licenseKeyInput.classList.remove('animate-shake'), 500);
-                }
-            } catch (e) { showToast('連線失敗', 'error'); }
-            finally { hideLoader(); }
-        });
-
-        document.addEventListener('DOMContentLoaded', checkActivation);
-
-        // --- UI Helpers ---
-        const loader = document.getElementById('loading-overlay');
-        function showLoader() { loader.classList.remove('hidden'); }
-        function hideLoader() { loader.classList.add('hidden'); }
-
-        const toast = document.getElementById('toast');
-        const toastMessage = document.getElementById('toast-message');
-        let toastTimeout;
-        function showToast(m, type = 'success') {
-            toastMessage.innerText = m;
-            toast.className = `fixed top-5 right-5 text-white py-3 px-6 rounded-lg shadow-lg transform z-[3000] ${type === 'error' ? 'bg-red-500' : 'bg-green-500'}`;
-            toast.classList.remove('translate-x-[120%]', 'opacity-0');
-            clearTimeout(toastTimeout);
-            toastTimeout = setTimeout(() => {
-                toast.classList.add('translate-x-[120%]', 'opacity-0');
-            }, 3000);
-        }
-
-        // PWA Install
-        let deferredPrompt;
-        const installBtn = document.getElementById('installBtn');
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => { navigator.serviceWorker.register('service-worker.js'); });
-        }
-        window.addEventListener('beforeinstallprompt', (e) => {
-            e.preventDefault(); deferredPrompt = e; installBtn.classList.remove('hidden');
-        });
-        installBtn.addEventListener('click', async () => {
-            if (deferredPrompt) {
-                deferredPrompt.prompt();
-                const { outcome } = await deferredPrompt.userChoice;
-                if (outcome === 'accepted') installBtn.classList.add('hidden');
-                deferredPrompt = null;
-            }
-        });
-    </script>
-</body>
-</html>
+                if
