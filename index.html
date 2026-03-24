@@ -640,11 +640,12 @@
         });
 
         // --- 授權機制 ---
-        // 自動判斷 API 位置 (方便本機測試與線上部署)
+        // 自動判斷 API 位置 (修正 Vercel 路徑問題)
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' || window.location.port === '5500';
-        // 如果是 Vercel 部署，後端就在同一個網址下
-        const API_BASE_URL = isLocal ? 'http://localhost:3000' : window.location.origin; 
-        
+        // 確保 Vercel 環境下 API URL 包含正確的通訊協定與網域
+        const API_BASE_URL = isLocal ? 'http://localhost:3000' : window.location.origin;
+        console.log('系統啟動，API URL:', API_BASE_URL);
+
         const activationOverlay = document.getElementById('activation-overlay');
         const appContainer = document.getElementById('appContainer');
         const activateBtn = document.getElementById('activateBtn');
@@ -653,11 +654,23 @@
 
         // 管理員後門：點擊標題 5 次顯示裝置 ID 或強制進入 (測試用)
         let clickCount = 0;
-        document.querySelector('#activation-overlay h2').addEventListener('click', () => {
+        document.querySelector('#activation-overlay h2').addEventListener('click', async () => {
             clickCount++;
             const deviceId = getOrCreateDeviceId();
+            
+            if (clickCount === 1) {
+                // 第一次點擊時偷偷測試後端健康狀態
+                try {
+                    const h = await fetch(`${API_BASE_URL}/health`);
+                    const data = await h.json();
+                    console.log('後端健康檢查:', data);
+                } catch (e) {
+                    console.error('後端無法連線:', e);
+                }
+            }
+
             if (clickCount >= 3) {
-                errorMsg.innerText = `偵錯資訊: ID=${deviceId.substring(0, 8)}...`;
+                errorMsg.innerText = `偵錯: ID=${deviceId.substring(0, 8)} | URL=${API_BASE_URL.replace('https://', '')}`;
                 errorMsg.classList.remove('text-red-500');
                 errorMsg.classList.add('text-gray-400');
             }
@@ -692,15 +705,22 @@
             console.log('當前裝置 ID:', deviceId);
             
             try {
+                // 增加超時處理
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000); // 10秒超時
+
                 const response = await fetch(`${API_BASE_URL}/verify`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ deviceId })
+                    body: JSON.stringify({ deviceId }),
+                    signal: controller.signal
                 });
+
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     const errorText = await response.text();
-                    throw new Error(`伺服器錯誤 (${response.status}): ${errorText}`);
+                    throw new Error(`伺服器回應錯誤 (${response.status})`);
                 }
 
                 const data = await response.json();
@@ -711,7 +731,11 @@
                 }
             } catch (error) {
                 console.error('驗證失敗:', error);
-                errorMsg.innerText = `連線失敗: ${error.message}`;
+                let displayMsg = '連線失敗，請檢查網路';
+                if (error.name === 'AbortError') displayMsg = '連線超時，伺服器可能正在啟動';
+                else if (error.message.includes('伺服器回應錯誤')) displayMsg = error.message;
+                
+                errorMsg.innerText = displayMsg;
                 showActivationOverlay();
             }
         }
